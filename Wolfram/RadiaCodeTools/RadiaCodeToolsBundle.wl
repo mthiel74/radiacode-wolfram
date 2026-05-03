@@ -3122,6 +3122,14 @@ RadiaCodeReset::usage =
 spectrum.  RadiaCodeReset[\"Dose\"] resets the cumulative dose.  Both \
 are destructive — confirm intent first.";
 
+RadiaCodeAutoStream::usage =
+  "RadiaCodeAutoStream[opts] picks the right live-streaming backend \
+automatically: if the libusb LibraryLink shim is built and loaded, \
+RadiaCodeNativeStream is used (no Python at runtime).  Otherwise \
+RadiaCodeStream is used (Python bridge).  Either way returns a \
+stream id suitable for RadiaCodeDashboard.  Prints which backend \
+fired.";
+
 $RadiaCodePython::usage =
   "$RadiaCodePython holds the path or name of the Python interpreter \
 used by Device.wl.  Default: \"python3\".";
@@ -3339,6 +3347,26 @@ RadiaCodeReset[what_String] :=
           "MessageParameters" -> {Lookup[proc, "ExitCode", "?"],
                                    Lookup[proc, "StandardError", ""]}|>]]];
     True
+  ];
+
+(* ---- auto-select between native libusb and Python bridge ---- *)
+
+Options[RadiaCodeAutoStream] = {
+  "PollInterval"  -> 1.0,
+  "SpectrumEvery" -> 5
+};
+
+RadiaCodeAutoStream[opts:OptionsPattern[]] :=
+  If[TrueQ @ Quiet @ RadiaCodeTools`DeviceNative`RadiaCodeNativeAvailableQ[],
+    Print["RadiaCodeAutoStream: using libusb LibraryLink (no Python)."];
+    RadiaCodeTools`DeviceNative`RadiaCodeNativeStream[
+      "PollInterval"  -> OptionValue["PollInterval"],
+      "SpectrumEvery" -> OptionValue["SpectrumEvery"]],
+    Print["RadiaCodeAutoStream: native libusb shim not built; \
+falling back to the Python bridge.  See Installation Option C in \
+the post for how to build the libusb .dylib if you'd rather avoid \
+Python at runtime."];
+    RadiaCodeStream["PollingInterval" -> OptionValue["PollInterval"]]
   ];
 
 End[];

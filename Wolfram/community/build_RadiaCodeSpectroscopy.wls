@@ -935,21 +935,28 @@ Installation section) or the libusb shim has not been compiled \
 (Option C).  See `Notebooks/LiveDashboard.nb` for a diagnostics \
 notebook that resolves both."],
 
-  codeCell["RadiaCodeTools`DeviceNative`RadiaCodeNativeDevices[]"],
+  codeCell[
+    "(* Lists the attached devices.  Tries the libusb LibraryLink \n   \
+driver first (no Python); falls back to the Python bridge if the \n   \
+native shim isn't compiled.  Either way returns a list of serial \n   \
+number strings. *)\n\
+If[TrueQ @ Quiet @ RadiaCodeTools`DeviceNative`RadiaCodeNativeAvailableQ[],\n  \
+RadiaCodeTools`DeviceNative`RadiaCodeNativeDevices[],\n  \
+RadiaCodeTools`Device`RadiaCodeDevices[]]"],
 
   textCell[
-    "Open the stream.  PollInterval is how often the toolkit polls \
-the device, in seconds; realtime samples are read every poll, and \
-the (heavier) cumulative spectrum is refreshed every Nth poll \
-controlled by SpectrumEvery.  Returns a stream id you pass to the \
-other API calls.  This call uses the pure\[Hyphen]Wolfram libusb \
-LibraryLink driver \[LongDash] no Python at runtime.  If you would \
-rather use the Python bridge (Option B in the Installation \
-section), substitute `RadiaCodeTools`Device`RadiaCodeStream[...]` \
-for the call below; the rest of the section is identical."],
+    "Open the stream.  RadiaCodeAutoStream picks the right backend \
+automatically: it uses the pure\[Hyphen]Wolfram libusb LibraryLink \
+driver when the .dylib is built (Option C above, no Python at \
+runtime), and falls back to the Python bridge (Option B) when the \
+.dylib isn't there.  The cell prints which backend it chose so you \
+know which one you're running.  PollInterval is how often the \
+toolkit polls the device in seconds; realtime samples come every \
+poll, the (heavier) cumulative spectrum is refreshed every Nth poll \
+via SpectrumEvery."],
 
   codeCell[
-    "streamId = RadiaCodeTools`DeviceNative`RadiaCodeNativeStream[\n  \
+    "streamId = RadiaCodeTools`Device`RadiaCodeAutoStream[\n  \
 \"PollInterval\" -> 1., \"SpectrumEvery\" -> 5]"],
 
   textCell[
