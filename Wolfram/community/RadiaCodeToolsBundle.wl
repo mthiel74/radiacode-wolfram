@@ -3463,13 +3463,35 @@ Begin["`Private`"];
 (* ---- locate / load the compiled library ---- *)
 
 libBaseDir := DirectoryName[$InputFileName /. "" :> NotebookFileName[]];
-libCandidates[] := With[{base = libBaseDir},
-  FileNameJoin[{base, "clib", "radiacode_link." <> #}] & /@
-    {"dylib", "so", "dll"}];
+
+(* The .dylib can live in several places depending on how the toolkit
+   was loaded.  Probe in priority order:
+     1. Beside the .wl file in clib/        (init.wl-style load)
+     2. Beside the bundle file in clib/     (bundle dropped next to clib/)
+     3. ../clib/                            (bundle inside community/, repo)
+     4. ../RadiaCodeTools/clib/             (bundle inside community/, repo)
+     5. ./RadiaCodeTools/clib/              (bundle in repo root)
+     6. ~/Library/RadiaCodeTools/           (user-installed copy)
+   You can also set RadiaCodeTools`DeviceNative`$RadiaCodeNativeLibrary
+   to an absolute path BEFORE loading the bundle to force a specific
+   location. *)
+libCandidates[] := Module[{base = libBaseDir, exts = {"dylib", "so", "dll"}, dirs},
+  dirs = {
+    FileNameJoin[{base, "clib"}],
+    FileNameJoin[{base, "..", "clib"}],
+    FileNameJoin[{base, "..", "RadiaCodeTools", "clib"}],
+    FileNameJoin[{base, "RadiaCodeTools", "clib"}],
+    FileNameJoin[{$HomeDirectory, "Library", "RadiaCodeTools"}]
+  };
+  Flatten[Outer[FileNameJoin[{#1, "radiacode_link." <> #2}] &, dirs, exts]]
+];
 
 resolveLib[] := SelectFirst[libCandidates[], FileExistsQ, None];
 
-$RadiaCodeNativeLibrary = resolveLib[];
+(* Don't clobber a user override (set via $RadiaCodeNativeLibrary = ...
+   before loading the bundle). *)
+If[!StringQ[$RadiaCodeNativeLibrary] || !FileExistsQ[$RadiaCodeNativeLibrary],
+  $RadiaCodeNativeLibrary = resolveLib[]];
 
 (* function handles -- populated lazily once we've found the .dylib *)
 $rcEnumerate = Null;
