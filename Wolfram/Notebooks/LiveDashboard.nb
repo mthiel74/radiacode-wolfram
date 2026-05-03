@@ -1,0 +1,211 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Wolfram 15.0' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       154,          7]
+NotebookDataLength[     10296,        202]
+NotebookOptionsPosition[      6988,        156]
+NotebookOutlinePosition[      7383,        172]
+CellTagsIndexPosition[      7340,        169]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell["RadiaCode \[LongDash] live dashboard", "Title",ExpressionUUID->"e348223a-f61e-4d98-a7a6-e30b34b248d3"],
+
+Cell["\<\
+Plug a RadiaCode detector in via USB, then evaluate the cells below in order \
+(Shift\[Hyphen]Enter).  The dashboard cell is a Dynamic[]; once it appears, \
+it will keep updating in place as fresh spectra and rate samples arrive.\
+\>", "Text",ExpressionUUID->"0f5999ab-a5f6-4b7a-b59d-57da438d0be1"],
+
+Cell["\<\
+Prerequisites: Python 3 with the `radiacode` package installed (`pip install \
+radiacode`).  No baud rate, no serial configuration\[LongDash]RadiaCode is a \
+USB\[Hyphen]HID device, and the Python side handles the USB transport.\
+\>", "Text",ExpressionUUID->"9e8f43aa-2f01-47ad-b9c2-1ae762000e83"],
+
+Cell["1. Load the package", "Section",ExpressionUUID->"51ed3470-cc40-4425-99a7-c3b1725cead3"],
+
+Cell["\<\
+This locates init.wl relative to the notebook so you can move the repo \
+without editing the path.\
+\>", "Text",ExpressionUUID->"10a08fa7-24d7-45d4-9575-7dd0b25f9b57"],
+
+Cell["\<\
+Get[FileNameJoin[{NotebookDirectory[], \"..\", \"RadiaCodeTools\", \
+\"init.wl\"}]]\
+\>", "Input",ExpressionUUID->"a72b9313-dc3f-479a-86c9-320f4773596a"],
+
+Cell["2. Diagnostics (run if anything fails)", "Section",ExpressionUUID->"791982fb-7512-4608-9489-b878c4b6a4a7"],
+
+Cell["\<\
+Shows the python3 path the bridge will use, the repo root, and verifies that \
+the radiacode Python package imports.  If python3 is \"python3\" with no \
+leading slash, your front-end's PATH does not contain it; install the \
+radiacode package into one of the searched locations or set \
+RadiaCodeTools`Device`$RadiaCodePython to an absolute path.\
+\>", "Text",ExpressionUUID->"83479439-4ae0-4439-b446-1b20f43dd645"],
+
+Cell["\<\
+{
+  \"Python\"   -> RadiaCodeTools`Device`$RadiaCodePython,
+  \"RepoRoot\" -> RadiaCodeTools`Device`$RadiaCodeRepoRoot,
+  \"radiacode importable\" -> (RunProcess[
+     {RadiaCodeTools`Device`$RadiaCodePython, \"-c\",
+      \"import radiacode; print(radiacode.__file__)\"}, \"ExitCode\"] === 0)
+} // Column\
+\>", "Input",ExpressionUUID->"6d3882c6-ee53-4d82-a21e-1b9a69b4e124"],
+
+Cell["3. Detect attached devices", "Section",ExpressionUUID->"9ca738aa-8b7e-4cae-b1e5-5b5b7cad2d0d"],
+
+Cell["\<\
+Returns a list of RadiaCode serial numbers.  Empty list = either no device \
+plugged in or the radiacode Python package is missing.  Failure[\[Ellipsis]] \
+= the Python bridge errored\[LongDash]check the message.\
+\>", "Text",ExpressionUUID->"3a130f1e-1aef-440e-9ce9-1c6b6ada3a25"],
+
+Cell["RadiaCodeTools`Device`RadiaCodeDevices[]", "Input",ExpressionUUID->"264de6fe-1e86-43dd-8ac5-d1c1366724b4"],
+
+Cell["4. (Option A) Single-shot spectrum acquisition", "Section",ExpressionUUID->"2c51bf0d-edf2-4d16-9c93-347fa8ac63a0"],
+
+Cell["\<\
+Reads the device's current cumulative spectrum and returns a RadiaCodeTools \
+spectrum Association you can plot, fit, or export.  Pass \"AccumulationTime\" \
+-> Quantity[n, \"Seconds\"] to integrate for n seconds before reading.\
+\>", "Text",ExpressionUUID->"263a94e1-2c26-48c3-bbdf-284f98a9b801"],
+
+Cell["\<\
+spec = RadiaCodeTools`Device`RadiaCodeAcquire[
+  \"AccumulationTime\" -> Quantity[30, \"Seconds\"]];\
+\>", "Input",ExpressionUUID->"f0ef4060-b8e7-4b1d-b58e-66adee57d114"],
+
+Cell["RadiaCodeTools`SpectrumPlot`RCSpectrumPlot[spec]", "Input",ExpressionUUID->"b4904b00-4013-403a-9a25-6cfda1f71089"],
+
+Cell["RadiaCodeTools`SpectrumPlot`PeakChannels[spec, 5]", "Input",ExpressionUUID->"4fabca1f-3e1e-460a-b6eb-d3b75bf5b5a7"],
+
+Cell["5. (Option B) Live streaming dashboard", "Section",ExpressionUUID->"d6028fc8-6bce-4f88-b859-cdfdb3f9a351"],
+
+Cell["\<\
+Starts an rcmultispg subprocess (the upstream Python tool) that polls the \
+device repeatedly and emits one ndjson record per sample.  The Wolfram side \
+tails that stream and feeds a Dynamic[] grid showing the live spectrum, count\
+\[Hyphen]rate trace, and dose\[Hyphen]rate trace.  Adjust \"PollingInterval\" \
+if you want spectra more or less often.\
+\>", "Text",ExpressionUUID->"4deffb62-5fc1-4fd4-b3a3-95524df44a4d"],
+
+Cell["\<\
+streamId = RadiaCodeTools`Device`RadiaCodeStream[
+  \"PollingInterval\" -> 5.0]\
+\>", "Input",ExpressionUUID->"c49d0219-6741-402f-b5c6-9828f9cdcb52"],
+
+Cell["\<\
+Evaluate the next cell to render the dashboard.  It will keep updating \
+itself; you do not need to re\[Hyphen]evaluate.\
+\>", "Text",ExpressionUUID->"ef1acec4-3b98-490d-a6a0-c7389152bab6"],
+
+Cell["RadiaCodeTools`LiveViewer`RadiaCodeDashboard[streamId]", "Input",ExpressionUUID->"05638044-2078-4c42-bb2a-09f74d9da6cb"],
+
+Cell["6. Inspect the latest state programmatically", "Section",ExpressionUUID->"51e5c8c7-4720-4593-920d-4ebc1094bc27"],
+
+Cell["\<\
+While the stream is running you can pull the current state at any time as a \
+plain Association \[LongDash] handy for ad-hoc analysis or saving snapshots.\
+\>", "Text",ExpressionUUID->"cd50d0f0-ef18-4c0d-81ad-8403a1937066"],
+
+Cell["\<\
+state = RadiaCodeTools`LiveViewer`RadiaCodeStreamState[streamId];
+Keys[state]\
+\>", "Input",ExpressionUUID->"79f6593a-689a-4d50-80d1-2c068902d5a5"],
+
+Cell["\<\
+(* example: count-rate quantiles over the live trace; rcmultispg emits null \
+for transient samples so we filter to NumericQ first *)
+Quantile[
+  Cases[Lookup[#, \"CountRate\"] & /@ state[\"Realtime\"], _?NumericQ],
+  {0.05, 0.5, 0.95}]\
+\>", "Input",ExpressionUUID->"c1e64eee-7dc3-4d07-b7c7-740f7832c71d"],
+
+Cell["7. Stop the stream", "Section",ExpressionUUID->"1236e730-119c-48b2-84d7-4626a9b87c53"],
+
+Cell["\<\
+Always close the stream when you are done.  This terminates the Python \
+subprocess, removes the polling task, and deletes the per-stream temp file.\
+\>", "Text",ExpressionUUID->"9ec4c3dd-1ed5-4bb1-8d0b-61009718dd4c"],
+
+Cell["RadiaCodeTools`LiveViewer`CloseRadiaCodeStream[streamId]", "Input",ExpressionUUID->"e6fa37fd-7823-4379-8b5c-5a08d7343671"],
+
+Cell["8. (Optional) Reset device state", "Section",ExpressionUUID->"5ed07824-842d-4df7-b5e1-657d4938b200"],
+
+Cell["\<\
+Destructive operations \[LongDash] only run if you really want to clear the \
+device's history.  Each function returns True on success, \
+Failure[\[Ellipsis]] otherwise.\
+\>", "Text",ExpressionUUID->"8d6e9e7f-06cb-4753-9ebe-4d179e2931db"],
+
+Cell["(* RadiaCodeTools`Device`RadiaCodeReset[\"Spectrum\"] *)", "Input",ExpressionUUID->"27ad4b11-1bca-46f3-9082-81d95d99061f"],
+
+Cell["(* RadiaCodeTools`Device`RadiaCodeReset[\"Dose\"] *)", "Input",ExpressionUUID->"7727f708-8273-4b03-a5c7-c83061268098"]
+},
+WindowSize->{1400, 900},
+WindowMargins->{{Automatic, 0}, {Automatic, 0}},
+FrontEndVersion->"15.0 for Mac OS X ARM (64-bit) (October 27, 2025)",
+StyleDefinitions->"Default.nb",
+ExpressionUUID->"3f8c1962-8028-4c7a-a05d-7492582cc223"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[554, 20, 108, 0, 70, "Title",ExpressionUUID->"e348223a-f61e-4d98-a7a6-e30b34b248d3"],
+Cell[665, 22, 308, 4, 70, "Text",ExpressionUUID->"0f5999ab-a5f6-4b7a-b59d-57da438d0be1"],
+Cell[976, 28, 307, 4, 70, "Text",ExpressionUUID->"9e8f43aa-2f01-47ad-b9c2-1ae762000e83"],
+Cell[1286, 34, 93, 0, 70, "Section",ExpressionUUID->"51ed3470-cc40-4425-99a7-c3b1725cead3"],
+Cell[1382, 36, 177, 3, 70, "Text",ExpressionUUID->"10a08fa7-24d7-45d4-9575-7dd0b25f9b57"],
+Cell[1562, 41, 163, 3, 70, "Input",ExpressionUUID->"a72b9313-dc3f-479a-86c9-320f4773596a"],
+Cell[1728, 46, 112, 0, 70, "Section",ExpressionUUID->"791982fb-7512-4608-9489-b878c4b6a4a7"],
+Cell[1843, 48, 426, 6, 70, "Text",ExpressionUUID->"83479439-4ae0-4439-b446-1b20f43dd645"],
+Cell[2272, 56, 385, 8, 70, "Input",ExpressionUUID->"6d3882c6-ee53-4d82-a21e-1b9a69b4e124"],
+Cell[2660, 66, 100, 0, 70, "Section",ExpressionUUID->"9ca738aa-8b7e-4cae-b1e5-5b5b7cad2d0d"],
+Cell[2763, 68, 291, 4, 70, "Text",ExpressionUUID->"3a130f1e-1aef-440e-9ce9-1c6b6ada3a25"],
+Cell[3057, 74, 112, 0, 70, "Input",ExpressionUUID->"264de6fe-1e86-43dd-8ac5-d1c1366724b4"],
+Cell[3172, 76, 120, 0, 70, "Section",ExpressionUUID->"2c51bf0d-edf2-4d16-9c93-347fa8ac63a0"],
+Cell[3295, 78, 307, 4, 70, "Text",ExpressionUUID->"263a94e1-2c26-48c3-bbdf-284f98a9b801"],
+Cell[3605, 84, 180, 3, 70, "Input",ExpressionUUID->"f0ef4060-b8e7-4b1d-b58e-66adee57d114"],
+Cell[3788, 89, 120, 0, 70, "Input",ExpressionUUID->"b4904b00-4013-403a-9a25-6cfda1f71089"],
+Cell[3911, 91, 121, 0, 70, "Input",ExpressionUUID->"4fabca1f-3e1e-460a-b6eb-d3b75bf5b5a7"],
+Cell[4035, 93, 112, 0, 70, "Section",ExpressionUUID->"d6028fc8-6bce-4f88-b859-cdfdb3f9a351"],
+Cell[4150, 95, 431, 6, 70, "Text",ExpressionUUID->"4deffb62-5fc1-4fd4-b3a3-95524df44a4d"],
+Cell[4584, 103, 159, 3, 70, "Input",ExpressionUUID->"c49d0219-6741-402f-b5c6-9828f9cdcb52"],
+Cell[4746, 108, 199, 3, 70, "Text",ExpressionUUID->"ef1acec4-3b98-490d-a6a0-c7389152bab6"],
+Cell[4948, 113, 126, 0, 70, "Input",ExpressionUUID->"05638044-2078-4c42-bb2a-09f74d9da6cb"],
+Cell[5077, 115, 118, 0, 70, "Section",ExpressionUUID->"51e5c8c7-4720-4593-920d-4ebc1094bc27"],
+Cell[5198, 117, 233, 3, 70, "Text",ExpressionUUID->"cd50d0f0-ef18-4c0d-81ad-8403a1937066"],
+Cell[5434, 122, 157, 3, 70, "Input",ExpressionUUID->"79f6593a-689a-4d50-80d1-2c068902d5a5"],
+Cell[5594, 127, 316, 6, 70, "Input",ExpressionUUID->"c1e64eee-7dc3-4d07-b7c7-740f7832c71d"],
+Cell[5913, 135, 92, 0, 70, "Section",ExpressionUUID->"1236e730-119c-48b2-84d7-4626a9b87c53"],
+Cell[6008, 137, 227, 3, 70, "Text",ExpressionUUID->"9ec4c3dd-1ed5-4bb1-8d0b-61009718dd4c"],
+Cell[6238, 142, 128, 0, 70, "Input",ExpressionUUID->"e6fa37fd-7823-4379-8b5c-5a08d7343671"],
+Cell[6369, 144, 106, 0, 70, "Section",ExpressionUUID->"5ed07824-842d-4df7-b5e1-657d4938b200"],
+Cell[6478, 146, 248, 4, 70, "Text",ExpressionUUID->"8d6e9e7f-06cb-4753-9ebe-4d179e2931db"],
+Cell[6729, 152, 128, 0, 70, "Input",ExpressionUUID->"27ad4b11-1bca-46f3-9082-81d95d99061f"],
+Cell[6860, 154, 124, 0, 70, "Input",ExpressionUUID->"7727f708-8273-4b03-a5c7-c83061268098"]
+}
+]
+*)
+
+(* End of internal cache information *)
