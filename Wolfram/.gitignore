@@ -1,2 +1,9 @@
 Notebooks/demo_*.png
 Notebooks/demo_*.n42
+
+# Source images for the GPT-generated infographics + the iPhone device
+# photo are kept locally for rebuilding the notebook, but are not
+# redistributed: some photos are third-party and the notebook already
+# embeds the infographics as serialised Image[] cells, so the .nb is
+# self-contained without this folder.
+community/RadiacodeInfo/
