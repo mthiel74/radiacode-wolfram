@@ -957,7 +957,13 @@ the stream looked like the moment you ran the cell."],
 
   codeCell[
     "state = RadiaCodeTools`LiveViewer`RadiaCodeStreamState[streamId];\n\
-KeyDrop[state, {\"Realtime\", \"GPS\", \"Spectrum\"}]"],
+(* Show only the user-facing summary fields.  The full state \n   \
+Association also stores Source / Process / BufferFile / Task -- \n   \
+the subprocess command line, OS process handle, scratch file path,\n   \
+and scheduled-task handle -- which embed local file system paths\n   \
+and PIDs you probably do not want to publish a snapshot of. *)\n\
+KeyTake[state, {\"Id\", \"Status\", \"RecordCount\",\n  \
+\"StartTime\", \"LastUpdate\"}]"],
 
   codeCell[
     "(* Quantiles of the live count-rate trace.  Filter to NumericQ\n   \
