@@ -47,9 +47,16 @@ imageCell[path_String, opts___] :=
    Embed live recordings via this helper, NOT via Video[]. *)
 animatedCell[gifPath_String, opts___] :=
   If[FileExistsQ[gifPath],
+    (* Import as "ImageList" -- a flat List of Image[] frames -- not
+       as "Animation" (which returns a Manipulate-style Animator
+       wrapper that needs a live kernel to advance, doesn't auto-play
+       in the FE, and freezes at the first frame on Community's
+       static HTML pre-render).  AnimatedImage[<list of frames>]
+       auto-plays in the notebook FE and renders as a looping <img>
+       on Community. *)
     Cell[BoxData[
       PaneBox[
-        ToBoxes[AnimatedImage[Import[gifPath, "Animation"],
+        ToBoxes[AnimatedImage[Import[gifPath, "ImageList"],
                               "FrameRate" -> 8,
                               ImageSize -> 720, opts]],
         Alignment -> Center, ImageSize -> Full]],
