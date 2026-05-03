@@ -226,10 +226,11 @@ On the very first poll it prints a one\[Hyphen]liner telling you \
 which backend it picked.  With the steps above completed you will \
 see:"],
 
-  textCell[
-    Style[
-      "RadiaCodeAutoStream: using libusb LibraryLink (no Python).",
-      "Code", FontFamily -> "Courier"]],
+  Cell[TextData[StyleBox[
+        "RadiaCodeAutoStream: using libusb LibraryLink (no Python).",
+        FontFamily -> "Courier", FontWeight -> Bold]],
+    "Text", TextAlignment -> Center,
+    CellMargins -> {{Inherited, Inherited}, {6, 6}}],
 
   textCell[
     "Re\[Hyphen]evaluating the original post's \[Section]10 cells \
