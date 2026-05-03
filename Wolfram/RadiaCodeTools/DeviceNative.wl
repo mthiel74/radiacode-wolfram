@@ -68,6 +68,15 @@ RadiaCodeNativeReset::usage =
   "RadiaCodeNativeReset[handle, \"Spectrum\"|\"Dose\"] resets the \
 device's accumulated spectrum or dose.";
 
+RadiaCodeNativeStream::usage =
+  "RadiaCodeNativeStream[] opens the first attached RadiaCode via \
+the libusb LibraryLink shim and returns a streaming session id you \
+pass to RadiaCodeDashboard -- no Python at runtime.  Optional first \
+argument is a serial number for picking among multiple attached \
+devices.  Options: \"PollInterval\" (default 1.0 s) and \
+\"SpectrumEvery\" (refresh the spectrum every Nth poll, default 5). \
+Close with CloseRadiaCodeStream[streamId].";
+
 $RadiaCodeNativeLibrary::usage =
   "$RadiaCodeNativeLibrary is the path to the compiled radiacode_link \
 shared library, or None if it could not be located/loaded.";
@@ -563,6 +572,42 @@ RadiaCodeNativeReset[handle_Integer, what_String] :=
           <|"MessageTemplate" ->
               "RadiaCodeNativeReset target must be \"Spectrum\" or \"Dose\""|>]
     ]
+  ];
+
+(* ===== high-level streaming wrapper (Python-free) ============== *)
+
+RadiaCodeNativeStream::usage =
+  "RadiaCodeNativeStream[] opens the first attached RadiaCode via \
+the libusb LibraryLink shim and returns a streaming session id you \
+pass to RadiaCodeDashboard.  No Python at runtime.  Optional first \
+argument is a serial number for picking among multiple attached \
+devices.  Options match OpenRadiaCodeNativeStream's: \"PollInterval\" \
+(default 1.0 s) and \"SpectrumEvery\" (refresh the spectrum every Nth \
+poll, default 5).  Close with CloseRadiaCodeStream[streamId], which \
+will both release the libusb handle and stop the polling task.";
+
+Options[RadiaCodeNativeStream] = Options[
+  RadiaCodeTools`LiveViewer`OpenRadiaCodeNativeStream];
+
+RadiaCodeNativeStream[opts:OptionsPattern[]] :=
+  Module[{handle},
+    handle = RadiaCodeNativeOpen[];
+    If[!IntegerQ[handle],
+      Return[Failure["NoDevice",
+        <|"MessageTemplate" -> "Could not open any RadiaCode via libusb. \
+Check `brew install libusb` is done and the .dylib was built via \
+`wolframscript -file Wolfram/RadiaCodeTools/clib/build.wls`."|>]]];
+    RadiaCodeTools`LiveViewer`OpenRadiaCodeNativeStream[handle, opts]
+  ];
+
+RadiaCodeNativeStream[serial_String, opts:OptionsPattern[]] :=
+  Module[{handle},
+    handle = RadiaCodeNativeOpen[serial];
+    If[!IntegerQ[handle],
+      Return[Failure["OpenFailed",
+        <|"MessageTemplate" -> "Could not open device `1`.",
+          "MessageParameters" -> {serial}|>]]];
+    RadiaCodeTools`LiveViewer`OpenRadiaCodeNativeStream[handle, opts]
   ];
 
 End[];

@@ -935,17 +935,22 @@ Installation section) or the libusb shim has not been compiled \
 (Option C).  See `Notebooks/LiveDashboard.nb` for a diagnostics \
 notebook that resolves both."],
 
-  codeCell["RadiaCodeTools`Device`RadiaCodeDevices[]"],
+  codeCell["RadiaCodeTools`DeviceNative`RadiaCodeNativeDevices[]"],
 
   textCell[
-    "Open the stream.  PollingInterval is how often the producer \
-asks the device for a fresh spectrum, in seconds; realtime samples \
-arrive at \[Tilde]1 Hz independent of this setting.  Returns a \
-stream id you pass to the other API calls."],
+    "Open the stream.  PollInterval is how often the toolkit polls \
+the device, in seconds; realtime samples are read every poll, and \
+the (heavier) cumulative spectrum is refreshed every Nth poll \
+controlled by SpectrumEvery.  Returns a stream id you pass to the \
+other API calls.  This call uses the pure\[Hyphen]Wolfram libusb \
+LibraryLink driver \[LongDash] no Python at runtime.  If you would \
+rather use the Python bridge (Option B in the Installation \
+section), substitute `RadiaCodeTools`Device`RadiaCodeStream[...]` \
+for the call below; the rest of the section is identical."],
 
   codeCell[
-    "streamId = RadiaCodeTools`Device`RadiaCodeStream[\n  \
-\"PollingInterval\" -> 5.]"],
+    "streamId = RadiaCodeTools`DeviceNative`RadiaCodeNativeStream[\n  \
+\"PollInterval\" -> 1., \"SpectrumEvery\" -> 5]"],
 
   textCell[
     "Render the dashboard.  Returns a Dynamic[] that self\

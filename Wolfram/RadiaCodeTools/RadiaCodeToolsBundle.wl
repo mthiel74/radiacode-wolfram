@@ -2643,6 +2643,14 @@ PollRadiaCodeStream::usage =
 in the buffer.  Normally called automatically by the scheduled task, \
 but useful for testing or for manually-driven dashboards.";
 
+OpenRadiaCodeNativeStream::usage =
+  "OpenRadiaCodeNativeStream[handle] starts a streaming session \
+backed by the pure-Wolfram libusb LibraryLink driver \
+(DeviceNative.wl) -- no Python in the runtime.  `handle` is the \
+integer returned by RadiaCodeNativeOpen[].  Options:\n\
+  \"PollInterval\" -> seconds (default 1.0)\n\
+  \"SpectrumEvery\" -> N (refresh the spectrum every N polls; default 5)";
+
 Begin["`Private`"];
 
 $streams = <||>;
@@ -2849,8 +2857,63 @@ OpenRadiaCodeStream[file_String, OptionsPattern[]] :=
 PlaybackNDJson[file_String, opts:OptionsPattern[OpenRadiaCodeStream]] :=
   OpenRadiaCodeStream[file, opts];
 
+(* ----- pure-Wolfram native stream (libusb LibraryLink, no Python) ----- *)
+
+Options[OpenRadiaCodeNativeStream] = {
+  "PollInterval"  -> 1.0,
+  "SpectrumEvery" -> 5
+};
+
+OpenRadiaCodeNativeStream[handle_Integer, OptionsPattern[]] :=
+  Module[{id, interval, spectrumEvery, task, tickCounter},
+    id = newId[];
+    interval = OptionValue["PollInterval"];
+    spectrumEvery = Max[1, OptionValue["SpectrumEvery"]];
+    tickCounter = 0;
+    $streams[id] = <|freshState[id, "native libusb (handle " <> ToString[handle] <> ")"],
+      "NativeHandle" -> handle|>;
+    task = RunScheduledTask[
+      pollNativeStream[id, spectrumEvery],
+      interval];
+    $streams[id] = <|$streams[id], "Task" -> task|>;
+    (* Fetch one spectrum + realtime sample immediately so the
+       dashboard isn't blank on first render. *)
+    pollNativeStream[id, 1];
+    id];
+
+(* Internal: poll the device once, dispatch the result through the
+   normal dispatchRecord path so the dashboard renders identically
+   regardless of whether the producer is rcmultispg or libusb. *)
+pollNativeStream[id_String, spectrumEvery_Integer] :=
+  Module[{state, handle, count, spec, rt},
+    state = Lookup[$streams, id, $Failed];
+    If[state === $Failed || state["Status"] === "closed", Return[]];
+    handle = Lookup[state, "NativeHandle", None];
+    If[handle === None, Return[]];
+    count = state["RecordCount"];
+    (* Realtime: every poll. *)
+    rt = Quiet @ RadiaCodeTools`DeviceNative`RadiaCodeNativeReadRealtime[handle];
+    If[AssociationQ[rt] && KeyExistsQ[rt, "CountRate"],
+      dispatchRecord[id, <|
+        "count_rate"    -> rt["CountRate"],
+        "dose_rate"     -> rt["DoseRate"],
+        "serial_number" -> Lookup[state["Spectrum"], "SerialNumber", ""]|>]];
+    (* Spectrum: every Nth poll, since it's a heavier USB transfer. *)
+    If[Mod[count, spectrumEvery] === 0,
+      spec = Quiet @ RadiaCodeTools`DeviceNative`RadiaCodeNativeReadSpectrum[handle];
+      If[AssociationQ[spec] && KeyExistsQ[spec, "Counts"],
+        dispatchRecord[id, <|
+          "spectrum" -> <|
+            "counts"   -> spec["Counts"],
+            "a0"       -> spec["Calibration"][[1]],
+            "a1"       -> spec["Calibration"][[2]],
+            "a2"       -> spec["Calibration"][[3]],
+            "duration" -> spec["Duration"]|>,
+          "serial_number" -> spec["SerialNumber"]|>]]];
+  ];
+
 CloseRadiaCodeStream[id_String] :=
-  Module[{state = Lookup[$streams, id, $Failed], status},
+  Module[{state = Lookup[$streams, id, $Failed], status, handle},
     If[state === $Failed, Return[$Failed]];
     If[state["Task"] =!= None,
       Quiet @ RemoveScheduledTask[state["Task"]]];
@@ -2858,6 +2921,10 @@ CloseRadiaCodeStream[id_String] :=
       status = Quiet @ ProcessStatus[state["Process"]];
       If[status === "Running",
         Quiet @ KillProcess[state["Process"]]]];
+    (* Native libusb handle: release it. *)
+    handle = Lookup[state, "NativeHandle", None];
+    If[IntegerQ[handle],
+      Quiet @ RadiaCodeTools`DeviceNative`RadiaCodeNativeClose[handle]];
     (* Only delete the buffer file if WE created it — i.e. a subprocess
        stream — never delete a file the user passed in directly. *)
     If[state["Process"] =!= None && StringQ[state["BufferFile"]] &&
@@ -3349,6 +3416,15 @@ buffer, or Missing[\"NoData\"] if no record was available this poll.";
 RadiaCodeNativeReset::usage =
   "RadiaCodeNativeReset[handle, \"Spectrum\"|\"Dose\"] resets the \
 device's accumulated spectrum or dose.";
+
+RadiaCodeNativeStream::usage =
+  "RadiaCodeNativeStream[] opens the first attached RadiaCode via \
+the libusb LibraryLink shim and returns a streaming session id you \
+pass to RadiaCodeDashboard -- no Python at runtime.  Optional first \
+argument is a serial number for picking among multiple attached \
+devices.  Options: \"PollInterval\" (default 1.0 s) and \
+\"SpectrumEvery\" (refresh the spectrum every Nth poll, default 5). \
+Close with CloseRadiaCodeStream[streamId].";
 
 $RadiaCodeNativeLibrary::usage =
   "$RadiaCodeNativeLibrary is the path to the compiled radiacode_link \
@@ -3845,6 +3921,42 @@ RadiaCodeNativeReset[handle_Integer, what_String] :=
           <|"MessageTemplate" ->
               "RadiaCodeNativeReset target must be \"Spectrum\" or \"Dose\""|>]
     ]
+  ];
+
+(* ===== high-level streaming wrapper (Python-free) ============== *)
+
+RadiaCodeNativeStream::usage =
+  "RadiaCodeNativeStream[] opens the first attached RadiaCode via \
+the libusb LibraryLink shim and returns a streaming session id you \
+pass to RadiaCodeDashboard.  No Python at runtime.  Optional first \
+argument is a serial number for picking among multiple attached \
+devices.  Options match OpenRadiaCodeNativeStream's: \"PollInterval\" \
+(default 1.0 s) and \"SpectrumEvery\" (refresh the spectrum every Nth \
+poll, default 5).  Close with CloseRadiaCodeStream[streamId], which \
+will both release the libusb handle and stop the polling task.";
+
+Options[RadiaCodeNativeStream] = Options[
+  RadiaCodeTools`LiveViewer`OpenRadiaCodeNativeStream];
+
+RadiaCodeNativeStream[opts:OptionsPattern[]] :=
+  Module[{handle},
+    handle = RadiaCodeNativeOpen[];
+    If[!IntegerQ[handle],
+      Return[Failure["NoDevice",
+        <|"MessageTemplate" -> "Could not open any RadiaCode via libusb. \
+Check `brew install libusb` is done and the .dylib was built via \
+`wolframscript -file Wolfram/RadiaCodeTools/clib/build.wls`."|>]]];
+    RadiaCodeTools`LiveViewer`OpenRadiaCodeNativeStream[handle, opts]
+  ];
+
+RadiaCodeNativeStream[serial_String, opts:OptionsPattern[]] :=
+  Module[{handle},
+    handle = RadiaCodeNativeOpen[serial];
+    If[!IntegerQ[handle],
+      Return[Failure["OpenFailed",
+        <|"MessageTemplate" -> "Could not open device `1`.",
+          "MessageParameters" -> {serial}|>]]];
+    RadiaCodeTools`LiveViewer`OpenRadiaCodeNativeStream[handle, opts]
   ];
 
 End[];

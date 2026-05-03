@@ -47,6 +47,14 @@ PollRadiaCodeStream::usage =
 in the buffer.  Normally called automatically by the scheduled task, \
 but useful for testing or for manually-driven dashboards.";
 
+OpenRadiaCodeNativeStream::usage =
+  "OpenRadiaCodeNativeStream[handle] starts a streaming session \
+backed by the pure-Wolfram libusb LibraryLink driver \
+(DeviceNative.wl) -- no Python in the runtime.  `handle` is the \
+integer returned by RadiaCodeNativeOpen[].  Options:\n\
+  \"PollInterval\" -> seconds (default 1.0)\n\
+  \"SpectrumEvery\" -> N (refresh the spectrum every N polls; default 5)";
+
 Begin["`Private`"];
 
 $streams = <||>;
@@ -253,8 +261,63 @@ OpenRadiaCodeStream[file_String, OptionsPattern[]] :=
 PlaybackNDJson[file_String, opts:OptionsPattern[OpenRadiaCodeStream]] :=
   OpenRadiaCodeStream[file, opts];
 
+(* ----- pure-Wolfram native stream (libusb LibraryLink, no Python) ----- *)
+
+Options[OpenRadiaCodeNativeStream] = {
+  "PollInterval"  -> 1.0,
+  "SpectrumEvery" -> 5
+};
+
+OpenRadiaCodeNativeStream[handle_Integer, OptionsPattern[]] :=
+  Module[{id, interval, spectrumEvery, task, tickCounter},
+    id = newId[];
+    interval = OptionValue["PollInterval"];
+    spectrumEvery = Max[1, OptionValue["SpectrumEvery"]];
+    tickCounter = 0;
+    $streams[id] = <|freshState[id, "native libusb (handle " <> ToString[handle] <> ")"],
+      "NativeHandle" -> handle|>;
+    task = RunScheduledTask[
+      pollNativeStream[id, spectrumEvery],
+      interval];
+    $streams[id] = <|$streams[id], "Task" -> task|>;
+    (* Fetch one spectrum + realtime sample immediately so the
+       dashboard isn't blank on first render. *)
+    pollNativeStream[id, 1];
+    id];
+
+(* Internal: poll the device once, dispatch the result through the
+   normal dispatchRecord path so the dashboard renders identically
+   regardless of whether the producer is rcmultispg or libusb. *)
+pollNativeStream[id_String, spectrumEvery_Integer] :=
+  Module[{state, handle, count, spec, rt},
+    state = Lookup[$streams, id, $Failed];
+    If[state === $Failed || state["Status"] === "closed", Return[]];
+    handle = Lookup[state, "NativeHandle", None];
+    If[handle === None, Return[]];
+    count = state["RecordCount"];
+    (* Realtime: every poll. *)
+    rt = Quiet @ RadiaCodeTools`DeviceNative`RadiaCodeNativeReadRealtime[handle];
+    If[AssociationQ[rt] && KeyExistsQ[rt, "CountRate"],
+      dispatchRecord[id, <|
+        "count_rate"    -> rt["CountRate"],
+        "dose_rate"     -> rt["DoseRate"],
+        "serial_number" -> Lookup[state["Spectrum"], "SerialNumber", ""]|>]];
+    (* Spectrum: every Nth poll, since it's a heavier USB transfer. *)
+    If[Mod[count, spectrumEvery] === 0,
+      spec = Quiet @ RadiaCodeTools`DeviceNative`RadiaCodeNativeReadSpectrum[handle];
+      If[AssociationQ[spec] && KeyExistsQ[spec, "Counts"],
+        dispatchRecord[id, <|
+          "spectrum" -> <|
+            "counts"   -> spec["Counts"],
+            "a0"       -> spec["Calibration"][[1]],
+            "a1"       -> spec["Calibration"][[2]],
+            "a2"       -> spec["Calibration"][[3]],
+            "duration" -> spec["Duration"]|>,
+          "serial_number" -> spec["SerialNumber"]|>]]];
+  ];
+
 CloseRadiaCodeStream[id_String] :=
-  Module[{state = Lookup[$streams, id, $Failed], status},
+  Module[{state = Lookup[$streams, id, $Failed], status, handle},
     If[state === $Failed, Return[$Failed]];
     If[state["Task"] =!= None,
       Quiet @ RemoveScheduledTask[state["Task"]]];
@@ -262,6 +325,10 @@ CloseRadiaCodeStream[id_String] :=
       status = Quiet @ ProcessStatus[state["Process"]];
       If[status === "Running",
         Quiet @ KillProcess[state["Process"]]]];
+    (* Native libusb handle: release it. *)
+    handle = Lookup[state, "NativeHandle", None];
+    If[IntegerQ[handle],
+      Quiet @ RadiaCodeTools`DeviceNative`RadiaCodeNativeClose[handle]];
     (* Only delete the buffer file if WE created it — i.e. a subprocess
        stream — never delete a file the user passed in directly. *)
     If[state["Process"] =!= None && StringQ[state["BufferFile"]] &&
