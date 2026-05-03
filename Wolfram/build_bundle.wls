@@ -70,7 +70,15 @@ header = "(* ::Package:: *)
    provides the same public API as Get[\"init.wl\"] from a clone of
    the radiacode-tools repository, in a single attachment.
 
-   Source: https://github.com/mthiel74/radiacode-wolfram
+   Source:        https://github.com/mthiel74/radiacode-wolfram
+   License:       MIT, Copyright (c) 2023 Chris Kuethe (upstream
+                  Python toolkit + sample data) and subsequent
+                  contributors to the Wolfram port (Marco Thiel
+                  + Claude).
+   Acknowledgement: derived from Chris Kuethe's Python radiacode-tools
+                  (https://github.com/ckuethe/radiacode-tools, MIT) -
+                  file format definitions, sample data, deadtime
+                  semantics, N42 conversion conventions.
 
    What you can do offline with just this file:
      - Parse RadiaCode XML spectra, .rctrk tracks, .rcspg spectrograms,

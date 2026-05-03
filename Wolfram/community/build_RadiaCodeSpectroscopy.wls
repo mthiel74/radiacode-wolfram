@@ -1062,11 +1062,31 @@ parser layer is fixed; the analysis layer can grow."],
   (* 7. REFERENCES                                                *)
   (* ============================================================ *)
 
-  sectionCell["References"],
+  sectionCell["References and acknowledgements"],
 
   textCell[
-    "\:25cf  RadiaCodeTools repository \[LongDash] \
-https://github.com/mthiel74/radiacode\[Hyphen]tools"],
+    "\:25cf  Wolfram port (this toolkit, the bundle, the Spectroscopy / \
+Calibrate / LiveViewer packages, the LibraryLink + libusb shim, the \
+test suite, and this post) \[LongDash] \
+https://github.com/mthiel74/radiacode\[Hyphen]wolfram (MIT)."],
+
+  textCell[
+    "\:25cf  Upstream Python toolkit \[LongDash] Chris Kuethe's \
+radiacode\[Hyphen]tools (https://github.com/ckuethe/radiacode\[Hyphen]tools, \
+MIT, Copyright (c) 2023 Chris Kuethe).  All sample data files used \
+in the worked examples (data_am241.xml, data_th232_plus_background.xml, \
+trinitite.xml, K40.rcspg, plus the unused walk.rctrk / xray.ndjson / \
+deadtime triplets shipped with the source repo) come from there and \
+are redistributed under MIT with attribution.  The Wolfram port also \
+draws on Chris's file format definitions, deadtime semantics, and N42 \
+conversion conventions \[LongDash] thanks!"],
+
+  textCell[
+    "\:25cf  Underlying device protocol \[LongDash] Maxim Andreev's \
+`radiacode` Python library (https://github.com/cdump/radiacode), MIT, \
+which speaks the RadiaCode USB / Bluetooth protocol; both the Python \
+bridge (Option B in Installation) and the libusb LibraryLink shim \
+(Option C) follow the protocol it documents."],
 
   textCell[
     "\:25cf  RadiaCode device documentation \[LongDash] \
